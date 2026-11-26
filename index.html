@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TicTacToe.pk — Play vs Smart AI</title>
+<meta name="description" content="Play Tic-Tac-Toe against an unbeatable AI (minimax algorithm). Built by Shahab Khan.">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',system-ui,sans-serif; }
+  body { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+         background:linear-gradient(135deg,#0D1117,#161B22 60%,#0D1117); color:#E6EDF3; padding:20px; }
+  h1 { font-size:1.6rem; margin-bottom:4px; }
+  h1 span { color:#00BFFF; }
+  .tagline { color:#8B949E; font-size:.9rem; margin-bottom:18px; }
+  .scoreboard { display:flex; gap:12px; margin-bottom:16px; }
+  .score-box { background:#161B22; border:1px solid #30363D; border-radius:12px; padding:12px 20px; text-align:center; min-width:100px; }
+  .score-box .label { font-size:.8rem; color:#8B949E; }
+  .score-box .val { font-size:1.6rem; font-weight:800; }
+  .you .val { color:#00BFFF; } .ai .val { color:#F85149; } .draw .val { color:#F2CC60; }
+  #status { font-size:1.1rem; font-weight:700; margin-bottom:16px; min-height:1.4em; text-align:center; }
+  .board { display:grid; grid-template-columns:repeat(3,110px); grid-template-rows:repeat(3,110px); gap:10px; }
+  .cell { background:#161B22; border:2px solid #30363D; border-radius:14px; font-size:3rem; font-weight:800;
+          cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.15s; }
+  .cell:hover:not(:disabled) { border-color:#00BFFF; background:#21262D; }
+  .cell:disabled { cursor:default; }
+  .cell.x { color:#00BFFF; } .cell.o { color:#F85149; }
+  .cell.win { border-color:#3FB950; background:#23863633; }
+  .controls { margin-top:18px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  .btn { background:#1F6FEB; color:#fff; border:none; border-radius:10px; padding:11px 22px;
+         font-size:.95rem; font-weight:700; cursor:pointer; }
+  .btn:hover { background:#388BFD; }
+  .btn-ghost { background:#21262D; }
+  .btn-ghost:hover { background:#30363D; }
+  .diff { display:flex; gap:6px; margin-bottom:14px; }
+  .diff button { background:#21262D; color:#E6EDF3; border:1px solid #30363D; border-radius:20px;
+                 padding:7px 16px; font-size:.85rem; cursor:pointer; }
+  .diff button.active { background:#1F6FEB; border-color:#1F6FEB; font-weight:700; }
+  footer { margin-top:18px; color:#8B949E; font-size:.85rem; text-align:center; }
+  footer a { color:#00BFFF; text-decoration:none; }
+  @media (max-width:420px){ .board{ grid-template-columns:repeat(3,88px); grid-template-rows:repeat(3,88px);} .cell{font-size:2.4rem;} }
+</style>
+</head>
+<body>
+  <h1>🎮 Tic<span>TacToe</span>.pk</h1>
+  <p class="tagline">You are ❌ — beat the computer AI if you can!</p>
+
+  <div class="diff">
+    <button data-d="easy">😊 Easy</button>
+    <button data-d="hard" class="active">🤖 Hard (AI)</button>
+  </div>
+
+  <div class="scoreboard">
+    <div class="score-box you"><div class="label">You ❌</div><div class="val" id="sYou">0</div></div>
+    <div class="score-box draw"><div class="label">Draws</div><div class="val" id="sDraw">0</div></div>
+    <div class="score-box ai"><div class="label">AI ⭕</div><div class="val" id="sAi">0</div></div>
+  </div>
+
+  <div id="status">Your turn!</div>
+  <div class="board" id="board"></div>
+
+  <div class="controls">
+    <button class="btn" id="restartBtn">🔄 New Round</button>
+    <button class="btn btn-ghost" id="resetBtn">🗑️ Reset Scores</button>
+  </div>
+
+  <footer>AI uses the minimax algorithm · Built by <a href="https://github.com/shahabkhan4636" target="_blank">Shahab Khan</a> · <a href="https://github.com/shahabkhan4636/TicTacToe.pk" target="_blank">View on GitHub</a></footer>
+
+<script>
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+let board, gameOver, difficulty = 'hard';
+let scores = {you:0, ai:0, draw:0};
+
+function newRound(){
+  board = Array(9).fill('');
+  gameOver = false;
+  statusEl.textContent = 'Your turn!';
+  render();
+}
+function render(winLine){
+  boardEl.innerHTML = '';
+  board.forEach((v,i)=>{
+    const b = document.createElement('button');
+    b.className = 'cell' + (v ? ' ' + v.toLowerCase() : '');
+    if(winLine && winLine.includes(i)) b.classList.add('win');
+    b.textContent = v;
+    b.disabled = !!v || gameOver;
+    b.onclick = ()=>playerMove(i);
+    boardEl.appendChild(b);
+  });
+}
+function winner(b){
+  const lines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  for(const l of lines) if(b[l[0]] && b[l[0]]===b[l[1]] && b[l[0]]===b[l[2]]) return {w:b[l[0]], line:l};
+  return b.every(c=>c) ? {w:'draw'} : null;
+}
+function playerMove(i){
+  if(gameOver || board[i]) return;
+  board[i] = 'X';
+  if(checkEnd()) return;
+  statusEl.textContent = 'AI is thinking...';
+  setTimeout(aiMove, 350);
+}
+function aiMove(){
+  if(gameOver) return;
+  let move;
+  if(difficulty==='easy' && Math.random()<0.6){
+    const empty = board.map((v,i)=>v?null:i).filter(v=>v!==null);
+    move = empty[Math.floor(Math.random()*empty.length)];
+  } else {
+    move = bestMove(board);
+  }
+  board[move] = 'O';
+  checkEnd();
+}
+function checkEnd(){
+  const r = winner(board);
+  if(!r) { statusEl.textContent = 'Your turn!'; render(); return false; }
+  gameOver = true;
+  if(r.w==='X'){ scores.you++; statusEl.textContent = '🎉 You win! Amazing!'; }
+  else if(r.w==='O'){ scores.ai++; statusEl.textContent = '🤖 AI wins! Try again!'; }
+  else { scores.draw++; statusEl.textContent = '🤝 It\'s a draw!'; }
+  document.getElementById('sYou').textContent = scores.you;
+  document.getElementById('sAi').textContent = scores.ai;
+  document.getElementById('sDraw').textContent = scores.draw;
+  render(r.line);
+  return true;
+}
+/* Minimax AI — unbeatable */
+function minimax(b, isMax){
+  const r = winner(b);
+  if(r) return r.w==='O' ? 10 : r.w==='X' ? -10 : 0;
+  let best = isMax ? -Infinity : Infinity;
+  for(let i=0;i<9;i++){
+    if(!b[i]){
+      b[i] = isMax ? 'O' : 'X';
+      const s = minimax(b, !isMax);
+      b[i] = '';
+      best = isMax ? Math.max(best,s) : Math.min(best,s);
+    }
+  }
+  return best;
+}
+function bestMove(b){
+  let bestScore = -Infinity, move = -1;
+  for(let i=0;i<9;i++){
+    if(!b[i]){
+      b[i]='O';
+      const s = minimax(b,false);
+      b[i]='';
+      if(s>bestScore){ bestScore=s; move=i; }
+    }
+  }
+  return move;
+}
+document.getElementById('restartBtn').onclick = newRound;
+document.getElementById('resetBtn').onclick = ()=>{
+  scores = {you:0, ai:0, draw:0};
+  document.getElementById('sYou').textContent = 0;
+  document.getElementById('sAi').textContent = 0;
+  document.getElementById('sDraw').textContent = 0;
+  newRound();
+};
+document.querySelectorAll('.diff button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.diff button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); difficulty = b.dataset.d; newRound();
+});
+newRound();
+</script>
+</body>
+</html>
